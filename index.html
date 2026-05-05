@@ -612,12 +612,16 @@
       </div>
       <div class="form-row">
         <div class="form-field">
-          <label class="form-label">Booth</label>
-          <select id="f-booth" class="form-select"><option value="">-Select-</option></select>
+          <label class="form-label">Booth <span style="font-size:9px;color:#bbb;font-weight:700">(multi-select)</span></label>
+          <div id="f-booth-container" class="op-checkbox-list" style="max-height:150px;overflow-y:auto">
+            <div class="no-ops-msg">Loading booths…</div>
+          </div>
         </div>
         <div class="form-field">
-          <label class="form-label">Printer</label>
-          <select id="f-printer" class="form-select"><option value="">-Select-</option></select>
+          <label class="form-label">Printer <span style="font-size:9px;color:#bbb;font-weight:700">(multi-select)</span></label>
+          <div id="f-printer-container" class="op-checkbox-list" style="max-height:150px;overflow-y:auto">
+            <div class="no-ops-msg">Loading printers…</div>
+          </div>
         </div>
       </div>
       <div class="form-section-title" style="margin-top:14px"><span class="section-dot dot-purple"></span> <span style="color:var(--sect-purple)">OPERATORS</span></div>
@@ -970,21 +974,64 @@ async function loadSelections() {
 }
 
 function populateUnitDropdowns() {
-  const boothSel   = document.getElementById('f-booth');
-  const printerSel = document.getElementById('f-printer');
-  const curBooth   = boothSel.value;
-  const curPrinter = printerSel.value;
-  boothSel.innerHTML   = '<option value="">-Select-</option>';
-  printerSel.innerHTML = '<option value="">-Select-</option>';
-  (SELECTIONS.boothUnits||[]).forEach(u => {
-    const o = document.createElement('option'); o.value = u; o.textContent = u; boothSel.appendChild(o);
-  });
-  (SELECTIONS.printerUnits||[]).forEach(u => {
-    const o = document.createElement('option'); o.value = u; o.textContent = u; printerSel.appendChild(o);
-  });
-  if (curBooth)   boothSel.value   = curBooth;
-  if (curPrinter) printerSel.value = curPrinter;
+  // Legacy shim — just re-render the equipment checkboxes with current state
+  renderEquipmentCheckboxes();
   renderOperatorCheckboxes();
+}
+
+async function refreshEquipmentAvailability() {
+  const date  = document.getElementById('f-date').value;
+  const start = document.getElementById('f-time-start').value;
+  const end   = document.getElementById('f-time-end').value;
+  const currentBooths   = getSelectedBooths();
+  const currentPrinters = getSelectedPrinters();
+  await renderEquipmentCheckboxes(date, start, end, currentBooths, currentPrinters);
+}
+
+async function renderEquipmentCheckboxes(date, start, end, selectedBooths = [], selectedPrinters = []) {
+  const boothEl   = document.getElementById('f-booth-container');
+  const printerEl = document.getElementById('f-printer-container');
+  const booths   = SELECTIONS.boothUnits   || [];
+  const printers = SELECTIONS.printerUnits || [];
+
+  let busyBooths   = new Set();
+  let busyPrinters = new Set();
+
+  if (date && start && end) {
+    try {
+      const excl = EDIT_EVENT_ID ? `&exclude_id=${EDIT_EVENT_ID}` : '';
+      const av = await api('GET', `/events/availability?date=${date}&time_start=${encodeURIComponent(start)}&time_end=${encodeURIComponent(end)}${excl}`);
+      busyBooths   = new Set(av.booths   || []);
+      busyPrinters = new Set(av.printers || []);
+    } catch(e) { /* ignore */ }
+  }
+
+  function renderList(container, items, busySet, selected, cbName) {
+    if (!items.length) {
+      container.innerHTML = '<div class="no-ops-msg">No units configured.</div>';
+      return;
+    }
+    container.innerHTML = items.map(u => {
+      const isBusy = busySet.has(u);
+      const isChecked = selected.includes(u) && !isBusy;
+      return `<label class="op-checkbox-row" style="${isBusy ? 'opacity:0.5;cursor:not-allowed' : ''}">
+        <input type="checkbox" name="${cbName}" value="${u}"
+          ${isChecked ? 'checked' : ''} ${isBusy ? 'disabled' : ''}>
+        <span class="op-checkbox-label">${u}</span>
+        ${isBusy ? '<span class="op-unavailable">⛔ Booked</span>' : ''}
+      </label>`;
+    }).join('');
+  }
+
+  renderList(boothEl,   booths,   busyBooths,   selectedBooths,   'f-booth-cb');
+  renderList(printerEl, printers, busyPrinters, selectedPrinters, 'f-printer-cb');
+}
+
+function getSelectedBooths() {
+  return Array.from(document.querySelectorAll('input[name="f-booth-cb"]:checked')).map(cb => cb.value);
+}
+function getSelectedPrinters() {
+  return Array.from(document.querySelectorAll('input[name="f-printer-cb"]:checked')).map(cb => cb.value);
 }
 
 /* ── NAVIGATION ───────────────────────────────────────────── */
@@ -1172,7 +1219,7 @@ function computeEventStatus(ev) {
   return {
     red:    !!(ev.name && ev.date && ev.location),
     black:  !!(ev.client_name && ev.contact),
-    green:  !!(ev.package && ev.booth),
+    green:  !!(ev.package && (Array.isArray(ev.booth) ? ev.booth.length > 0 : ev.booth)),
     purple: !!(
       (ev.operators && ev.operators.length > 0) &&
       (ev.consumables && ev.consumables.pre && (ev.consumables.pre.photo > 0 || ev.consumables.pre.mag > 0))
@@ -1276,8 +1323,14 @@ function startEditEvent(id) {
   const pkgObj = PACKAGES.find(p => p.name === ev.package);
   document.getElementById('f-package').value = pkgObj ? `${pkgObj.name}|${pkgObj.price}` : '';
   document.getElementById('f-pkg-price').value = ev.package_price || 0;
-  document.getElementById('f-booth').value   = ev.booth || '';
-  document.getElementById('f-printer').value = ev.printer || '';
+
+  // Booth and printer are now arrays; restore after rendering checkboxes
+  const savedBooths   = Array.isArray(ev.booth)   ? ev.booth   : (ev.booth   ? [ev.booth]   : []);
+  const savedPrinters = Array.isArray(ev.printer)  ? ev.printer : (ev.printer ? [ev.printer] : []);
+  const evDate  = ev.date || '';
+  const evStart = ev.time_start || '';
+  const evEnd   = ev.time_end   || '';
+  renderEquipmentCheckboxes(evDate, evStart, evEnd, savedBooths, savedPrinters);
   document.getElementById('f-dp').value   = ev.down_payment || 0;
   document.getElementById('f-bal').value  = ev.balance || 0;
   document.getElementById('f-paid').checked = ev.paid || false;
@@ -1410,8 +1463,8 @@ async function saveEvent() {
     contact,
     package:       pkgKey,
     package_price: pkgObj ? pkgObj.price : (parseFloat(document.getElementById('f-pkg-price').value) || 0),
-    booth:         document.getElementById('f-booth').value,
-    printer:       document.getElementById('f-printer').value,
+    booth:         getSelectedBooths(),
+    printer:       getSelectedPrinters(),
     operators:     selectedOps,
     operator:      selectedOps[0] || '',
     down_payment:  parseFloat(document.getElementById('f-dp').value) || 0,
@@ -1481,7 +1534,7 @@ function resetForm() {
   populatePackageDropdown();
   document.getElementById('f-package').selectedIndex = 0;
   renderOperatorCheckboxes();
-  populateUnitDropdowns();
+  renderEquipmentCheckboxes();
 }
 
 /* ── OPERATOR AVAILABILITY ─────────────────────────────── */
@@ -1518,6 +1571,7 @@ function refreshOperatorAvailability() {
   const end   = document.getElementById('f-time-end').value;
   const currentChecked = getSelectedOperators();
   renderOperatorCheckboxes(currentChecked, EDIT_EVENT_ID, date, start, end);
+  refreshEquipmentAvailability();
 }
 
 function renderOperatorCheckboxes(selectedOps = [], excludeEventId = null, forDate = null, forStart = null, forEnd = null) {
@@ -1821,7 +1875,8 @@ function showChecklist(id) {
     <div class="detail-row"><span class="detail-key">Contact</span><span class="detail-val">${ev.contact||'–'}</span></div>
     <div class="detail-row"><span class="detail-key">Time</span><span class="detail-val">${ev.time_start||'–'} → ${ev.time_end||'–'}</span></div>
     <div class="detail-row"><span class="detail-key">Package</span><span class="detail-val">${ev.package||'–'}</span></div>
-    <div class="detail-row"><span class="detail-key">Booth / Printer</span><span class="detail-val">${ev.booth||'–'} / ${ev.printer||'–'}</span></div>
+    <div class="detail-row"><span class="detail-key">Booth</span><span class="detail-val">${(Array.isArray(ev.booth) ? ev.booth : (ev.booth ? [ev.booth] : [])).join(', ') || '–'}</span></div>
+    <div class="detail-row"><span class="detail-key">Printer</span><span class="detail-val">${(Array.isArray(ev.printer) ? ev.printer : (ev.printer ? [ev.printer] : [])).join(', ') || '–'}</span></div>
     <div class="detail-row"><span class="detail-key">Operators</span><span class="detail-val">${getOperatorDisplay(ev)}</span></div>
     <hr class="section-divider">
     <div style="font-size:10px;font-weight:900;color:#bbb;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px">📦 Material Count</div>

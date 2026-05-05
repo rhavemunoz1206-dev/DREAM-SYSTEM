@@ -518,7 +518,8 @@
         <div class="legend-row"><span class="legend-dot" style="background:var(--sect-green)"></span><span class="legend-label">Booth &amp; Package</span></div>
         <div class="legend-row"><span class="legend-dot" style="background:var(--sect-blue)"></span><span class="legend-label">Layout</span></div>
         <div class="legend-row"><span class="legend-dot" style="background:var(--sect-yellow)"></span><span class="legend-label">Payment Details</span></div>
-        <div class="legend-row"><span class="legend-dot" style="background:var(--sect-purple)"></span><span class="legend-label">Material Count</span></div>
+        <div class="legend-row"><span class="legend-dot" style="background:var(--sect-purple)"></span><span class="legend-label">Operators &amp; Material Count</span></div>
+        <div style="padding-left:18px;margin-top:-2px;margin-bottom:2px"><span style="font-size:9px;font-weight:700;color:#bbb">↳ Operator assigned + material cost logged</span></div>
       </div>
     </div>
     <div class="events-right-panel">
@@ -1173,14 +1174,17 @@ function computeEventStatus(ev) {
     red:    !!(ev.name && ev.date && ev.location),
     black:  !!(ev.client_name && ev.contact),
     green:  !!(ev.package && ev.booth),
-    purple: !!(ev.consumables && ev.consumables.pre && (ev.consumables.pre.photo > 0 || ev.consumables.pre.mag > 0)),
+    purple: !!(
+      (ev.operators && ev.operators.length > 0) &&
+      (ev.consumables && ev.consumables.pre && (ev.consumables.pre.photo > 0 || ev.consumables.pre.mag > 0))
+    ),
     yellow: !!(ev.down_payment > 0 && ev.has_payment_proof),
     blue:   !!(ev.has_layout)
   };
 }
 
 function dotTitle(key) {
-  const titles = { red: 'Event Information', black: 'Client Information', green: 'Booth & Package', purple: 'Material Count', yellow: 'Payment Details', blue: 'Layout' };
+  const titles = { red: 'Event Information', black: 'Client Information', green: 'Booth & Package', purple: 'Operators & Material Count', yellow: 'Payment Details', blue: 'Layout' };
   return titles[key] || key;
 }
 

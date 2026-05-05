@@ -1225,7 +1225,7 @@ function computeEventStatus(ev) {
       (ev.operators && ev.operators.length > 0) &&
       (ev.consumables && ev.consumables.pre && (ev.consumables.pre.photo > 0 || ev.consumables.pre.mag > 0))
     ),
-    yellow: !!(ev.down_payment > 0 && ev.has_payment_proof),
+    yellow: !!(ev.paid || (ev.down_payment > 0 && ev.has_payment_proof)),
     blue:   !!(ev.has_layout)
   };
 }
@@ -2251,8 +2251,8 @@ async function renderSummary() {
           ${miscTotal>0?`<div class="sum-ev-item"><div class="sum-ev-item-label">Misc. Fees</div><div class="sum-ev-item-val" style="color:var(--orange)">−₱${miscTotal.toLocaleString()}</div></div>`:''}
           ${opSal>0?`<div class="sum-ev-item"><div class="sum-ev-item-label">Op. Salary</div><div class="sum-ev-item-val" style="color:var(--red)">−₱${opSal.toLocaleString()}</div></div>`:''}
           ${(opSal>0||miscTotal>0)?`<div class="sum-ev-item"><div class="sum-ev-item-label">Net Revenue</div><div class="sum-ev-item-val" style="color:var(--green);font-weight:900">₱${net.toLocaleString()}</div></div>`:''}
-          <div class="sum-ev-item"><div class="sum-ev-item-label">📷 Photo Paper</div><div class="sum-ev-item-val">Pre: <strong>${prePh}</strong> / Post: <strong>${postPh}</strong><br><span style="color:var(--green);font-size:11px">Left: ${Math.max(0,postPh)} pcs</span></div></div>
-          <div class="sum-ev-item"><div class="sum-ev-item-label">🧲 Mag. Sheet</div><div class="sum-ev-item-val">Pre: <strong>${preMg}</strong> / Post: <strong>${postMg}</strong><br><span style="color:var(--green);font-size:11px">Left: ${Math.max(0,postMg)} pcs</span></div></div>
+          <div class="sum-ev-item"><div class="sum-ev-item-label">📷 Photo Paper</div><div class="sum-ev-item-val">Pre: <strong>${prePh}</strong> / Post: <strong>${postPh}</strong><br><span style="color:var(--green);font-size:11px">Used: ${Math.max(0,prePh-postPh)} pcs</span></div></div>
+          <div class="sum-ev-item"><div class="sum-ev-item-label">🧲 Mag. Sheet</div><div class="sum-ev-item-val">Pre: <strong>${preMg}</strong> / Post: <strong>${postMg}</strong><br><span style="color:var(--green);font-size:11px">Used: ${Math.max(0,preMg-postMg)} pcs</span></div></div>
         </div>
       </div>`;
     }).join('')}
@@ -2292,7 +2292,7 @@ async function downloadSummaryPDF() {
     return [i+1,e.name,fmtDate(e.date)||'–',e.client_name||'–',e.package||'–',e.booth||'–',e.printer||'–',
       getOperatorDisplay(e),opSal>0?p(opSal):'–',extAmt>0?p(extAmt):'–',
       miscTotal>0?p(miscTotal):'–',p(totalDue),p(net),
-      `Pre:${prePh} Post:${postPh} Left:${postPh}`,`Pre:${preMg} Post:${postMg} Left:${postMg}`,e.paid?'PAID':'UNPAID',e.completed?'Done':'Pending'];
+      `Pre:${prePh} Post:${postPh} Used:${usedPh}`,`Pre:${preMg} Post:${postMg} Used:${usedMg}`,e.paid?'PAID':'UNPAID',e.completed?'Done':'Pending'];
   });
 
   doc.autoTable({

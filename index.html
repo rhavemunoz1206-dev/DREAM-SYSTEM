@@ -810,6 +810,7 @@ let PKG_EDIT_ID   = null;
 let paymentProofUploaded = false;
 let layoutUploaded = false;
 let miscRows = [];
+let SUPPRESS_AVAILABILITY_REFRESH = false;
 
 /* ── API HELPERS ─────────────────────────────────────────── */
 async function api(method, path, body) {
@@ -1298,6 +1299,7 @@ function startEditEvent(id) {
   const ev = EVENTS.find(e => e.id === id);
   if (!ev) return;
   EDIT_EVENT_ID = id;
+  SUPPRESS_AVAILABILITY_REFRESH = true;  // prevent onchange from wiping selections
   document.getElementById('add-event-title').textContent = 'EDIT EVENT';
   document.getElementById('save-btn').textContent = 'UPDATE EVENT';
   closeModalDirect();
@@ -1324,13 +1326,6 @@ function startEditEvent(id) {
   document.getElementById('f-package').value = pkgObj ? `${pkgObj.name}|${pkgObj.price}` : '';
   document.getElementById('f-pkg-price').value = ev.package_price || 0;
 
-  // Booth and printer are stored as comma-separated strings
-  const savedBooths   = ev.booth   ? ev.booth.split(',').map(s => s.trim()).filter(Boolean)   : [];
-  const savedPrinters = ev.printer ? ev.printer.split(',').map(s => s.trim()).filter(Boolean) : [];
-  const evDate  = ev.date || '';
-  const evStart = ev.time_start || '';
-  const evEnd   = ev.time_end   || '';
-  renderEquipmentCheckboxes(evDate, evStart, evEnd, savedBooths, savedPrinters);
   document.getElementById('f-dp').value   = ev.down_payment || 0;
   document.getElementById('f-bal').value  = ev.balance || 0;
   document.getElementById('f-paid').checked = ev.paid || false;
@@ -1342,9 +1337,6 @@ function startEditEvent(id) {
   document.getElementById('cnt-photo-post').value = post.photo || 0;
   document.getElementById('cnt-mag-pre').value    = pre.mag    || 0;
   document.getElementById('cnt-mag-post').value   = post.mag   || 0;
-
-  const selectedOps = ev.operators || [];
-  renderOperatorCheckboxes(selectedOps, id);
 
   paymentProofUploaded = ev.has_payment_proof || false;
   layoutUploaded = ev.has_layout || false;
@@ -1373,7 +1365,6 @@ function startEditEvent(id) {
     prevPayment.style.display = 'none';
   }
 
-  // Restore layout preview
   if (layoutUploaded) {
     document.getElementById('upload-area-layout').style.borderColor = 'var(--sect-blue)';
     loadUploadPreview(prevLayout, id, 'layout');
@@ -1382,6 +1373,15 @@ function startEditEvent(id) {
   }
 
   go('add-event');
+
+  // Parse saved booth/printer from comma-separated string, then render — done LAST
+  // so the async availability fetch has the correct exclude_id and saved selections win.
+  const savedBooths   = ev.booth   ? ev.booth.split(',').map(s => s.trim()).filter(Boolean)   : [];
+  const savedPrinters = ev.printer ? ev.printer.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const selectedOps   = ev.operators || [];
+  renderOperatorCheckboxes(selectedOps, id);
+  renderEquipmentCheckboxes(ev.date || '', ev.time_start || '', ev.time_end || '', savedBooths, savedPrinters)
+    .finally(() => { SUPPRESS_AVAILABILITY_REFRESH = false; });
 }
 
 function computeBalance() {
@@ -1566,6 +1566,7 @@ function getUnavailableOperators(forDate, forStart, forEnd, excludeEventId) {
 }
 
 function refreshOperatorAvailability() {
+  if (SUPPRESS_AVAILABILITY_REFRESH) return;
   const date  = document.getElementById('f-date').value;
   const start = document.getElementById('f-time-start').value;
   const end   = document.getElementById('f-time-end').value;

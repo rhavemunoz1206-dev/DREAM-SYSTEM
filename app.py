@@ -428,49 +428,55 @@ def get_events():
 def create_event():
     data = request.get_json(force=True)
     conn = get_db(); cur = conn.cursor()
-    cur.execute('''
-        INSERT INTO events (
-            name, date, location, client_name, contact,
-            package, package_price, down_payment, balance,
-            paid, completed, booth, printer,
-            time_start, time_end, operator,
-            operators_list, extensions, misc_fees, misc_total,
-            consumables, materials,
-            has_payment_proof, has_layout, created_at
-        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-        RETURNING id
-    ''', (
-        data.get('name'),
-        data.get('date'),
-        data.get('location'),
-        data.get('client_name'),
-        data.get('contact'),
-        data.get('package'),
-        float(data.get('package_price') or 0),
-        float(data.get('down_payment')  or 0),
-        float(data.get('balance')       or 0),
-        bool(data.get('paid',      False)),
-        bool(data.get('completed', False)),
-        data.get('booth'),
-        data.get('printer'),
-        data.get('time_start'),
-        data.get('time_end'),
-        data.get('operator'),
-        json.dumps(data.get('operators',   [])),
-        json.dumps(data.get('extensions',  [])),
-        json.dumps(data.get('misc_fees',   [])),
-        float(data.get('misc_total') or 0),
-        json.dumps(data.get('consumables', {'pre': {'photo': 0, 'mag': 0}, 'post': {'photo': 0, 'mag': 0}})),
-        json.dumps(data.get('materials',   {})),
-        bool(data.get('has_payment_proof', False)),
-        bool(data.get('has_layout',        False)),
-        now_ph(),
-    ))
-    event_id = cur.fetchone()['id']
-    conn.commit()
-    cur.execute('SELECT * FROM events WHERE id=%s', (event_id,))
-    row = cur.fetchone(); cur.close(); conn.close()
-    return jsonify(row_to_dict(row)), 201
+    try:
+        cur.execute('''
+            INSERT INTO events (
+                name, date, location, client_name, contact,
+                package, package_price, down_payment, balance,
+                paid, completed, booth, printer,
+                time_start, time_end, operator,
+                operators_list, extensions, misc_fees, misc_total,
+                consumables, materials,
+                has_payment_proof, has_layout, created_at
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING id
+        ''', (
+            data.get('name'),
+            data.get('date'),
+            data.get('location'),
+            data.get('client_name'),
+            data.get('contact'),
+            data.get('package'),
+            float(data.get('package_price') or 0),
+            float(data.get('down_payment')  or 0),
+            float(data.get('balance')       or 0),
+            bool(data.get('paid',      False)),
+            bool(data.get('completed', False)),
+            data.get('booth'),
+            data.get('printer'),
+            data.get('time_start'),
+            data.get('time_end'),
+            data.get('operator'),
+            json.dumps(data.get('operators',   [])),
+            json.dumps(data.get('extensions',  [])),
+            json.dumps(data.get('misc_fees',   [])),
+            float(data.get('misc_total') or 0),
+            json.dumps(data.get('consumables', {'pre': {'photo': 0, 'mag': 0}, 'post': {'photo': 0, 'mag': 0}})),
+            json.dumps(data.get('materials',   {})),
+            bool(data.get('has_payment_proof', False)),
+            bool(data.get('has_layout',        False)),
+            now_ph(),
+        ))
+        event_id = cur.fetchone()['id']
+        conn.commit()
+        cur.execute('SELECT * FROM events WHERE id=%s', (event_id,))
+        row = cur.fetchone(); cur.close(); conn.close()
+        return jsonify(row_to_dict(row)), 201
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        conn.rollback(); cur.close(); conn.close()
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/events/<int:event_id>', methods=['GET'])
@@ -494,47 +500,53 @@ def update_event(event_id):
     if not existing:
         cur.close(); conn.close()
         return jsonify({'error': 'Event not found'}), 404
-    cur.execute('''
-        UPDATE events SET
-            name=%s, date=%s, location=%s, client_name=%s, contact=%s,
-            package=%s, package_price=%s, down_payment=%s, balance=%s,
-            paid=%s, completed=%s, booth=%s, printer=%s,
-            time_start=%s, time_end=%s, operator=%s,
-            operators_list=%s, extensions=%s, misc_fees=%s, misc_total=%s,
-            consumables=%s, materials=%s,
-            has_payment_proof=%s, has_layout=%s
-        WHERE id=%s
-    ''', (
-        data.get('name',         existing['name']),
-        data.get('date',         existing['date']),
-        data.get('location',     existing['location']),
-        data.get('client_name',  existing['client_name']),
-        data.get('contact',      existing['contact']),
-        data.get('package',      existing['package']),
-        float(data.get('package_price', existing['package_price']) or 0),
-        float(data.get('down_payment',  existing['down_payment'])  or 0),
-        float(data.get('balance',       existing['balance'])       or 0),
-        bool(data.get('paid',      existing['paid'])),
-        bool(data.get('completed', existing['completed'])),
-        data.get('booth',    existing['booth']),
-        data.get('printer',  existing['printer']),
-        data.get('time_start', existing['time_start']),
-        data.get('time_end',   existing['time_end']),
-        data.get('operator',   existing['operator']),
-        json.dumps(data.get('operators',  json.loads(existing['operators_list'] or '[]'))),
-        json.dumps(data.get('extensions', json.loads(existing['extensions']     or '[]'))),
-        json.dumps(data.get('misc_fees',  json.loads(existing['misc_fees']      or '[]'))),
-        float(data.get('misc_total', existing['misc_total']) or 0),
-        json.dumps(data.get('consumables', json.loads(existing['consumables'] or '{}'))),
-        json.dumps(data.get('materials',   json.loads(existing['materials']   or '{}'))),
-        bool(data.get('has_payment_proof', existing['has_payment_proof'])),
-        bool(data.get('has_layout',        existing['has_layout'])),
-        event_id,
-    ))
-    conn.commit()
-    cur.execute('SELECT * FROM events WHERE id=%s', (event_id,))
-    row = cur.fetchone(); cur.close(); conn.close()
-    return jsonify(row_to_dict(row))
+    try:
+        cur.execute('''
+            UPDATE events SET
+                name=%s, date=%s, location=%s, client_name=%s, contact=%s,
+                package=%s, package_price=%s, down_payment=%s, balance=%s,
+                paid=%s, completed=%s, booth=%s, printer=%s,
+                time_start=%s, time_end=%s, operator=%s,
+                operators_list=%s, extensions=%s, misc_fees=%s, misc_total=%s,
+                consumables=%s, materials=%s,
+                has_payment_proof=%s, has_layout=%s
+            WHERE id=%s
+        ''', (
+            data.get('name',         existing['name']),
+            data.get('date',         existing['date']),
+            data.get('location',     existing['location']),
+            data.get('client_name',  existing['client_name']),
+            data.get('contact',      existing['contact']),
+            data.get('package',      existing['package']),
+            float(data.get('package_price', existing['package_price']) or 0),
+            float(data.get('down_payment',  existing['down_payment'])  or 0),
+            float(data.get('balance',       existing['balance'])       or 0),
+            bool(data.get('paid',      existing['paid'])),
+            bool(data.get('completed', existing['completed'])),
+            data.get('booth',    existing['booth']),
+            data.get('printer',  existing['printer']),
+            data.get('time_start', existing['time_start']),
+            data.get('time_end',   existing['time_end']),
+            data.get('operator',   existing['operator']),
+            json.dumps(data.get('operators',  json.loads(existing['operators_list'] or '[]'))),
+            json.dumps(data.get('extensions', json.loads(existing['extensions']     or '[]'))),
+            json.dumps(data.get('misc_fees',  json.loads(existing['misc_fees']      or '[]'))),
+            float(data.get('misc_total', existing['misc_total']) or 0),
+            json.dumps(data.get('consumables', json.loads(existing['consumables'] or '{}'))),
+            json.dumps(data.get('materials',   json.loads(existing['materials']   or '{}'))),
+            bool(data.get('has_payment_proof', existing['has_payment_proof'])),
+            bool(data.get('has_layout',        existing['has_layout'])),
+            event_id,
+        ))
+        conn.commit()
+        cur.execute('SELECT * FROM events WHERE id=%s', (event_id,))
+        row = cur.fetchone(); cur.close(); conn.close()
+        return jsonify(row_to_dict(row))
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        conn.rollback(); cur.close(); conn.close()
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/events/<int:event_id>', methods=['DELETE'])

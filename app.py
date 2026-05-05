@@ -81,6 +81,14 @@ def row_to_dict(row):
             d[col] = bool(d[col])
     return d
 
+def normalize_unit(val) -> str:
+    """Ensure booth/printer is always stored as a plain comma-separated string."""
+    if val is None:
+        return ''
+    if isinstance(val, list):
+        return ', '.join(str(v).strip() for v in val if v)
+    return str(val).strip()
+
 def hash_password(pw: str) -> str:
     return hashlib.sha256(pw.encode()).hexdigest()
 
@@ -461,8 +469,8 @@ def create_event():
             float(data.get('balance')       or 0),
             bool(data.get('paid',      False)),
             bool(data.get('completed', False)),
-            data.get('booth'),
-            data.get('printer'),
+            normalize_unit(data.get('booth')),
+            normalize_unit(data.get('printer')),
             data.get('time_start'),
             data.get('time_end'),
             data.get('operator'),
@@ -532,8 +540,8 @@ def update_event(event_id):
             float(data.get('balance',       existing['balance'])       or 0),
             bool(data.get('paid',      existing['paid'])),
             bool(data.get('completed', existing['completed'])),
-            data.get('booth',    existing['booth']),
-            data.get('printer',  existing['printer']),
+            normalize_unit(data.get('booth',   existing['booth'])),
+            normalize_unit(data.get('printer', existing['printer'])),
             data.get('time_start', existing['time_start']),
             data.get('time_end',   existing['time_end']),
             data.get('operator',   existing['operator']),
@@ -712,6 +720,74 @@ def get_upload_url(event_id, upload_type):
             return jsonify({'url': result['secure_url']})
         except Exception:
             return jsonify({'error': 'File not found'}), 404
+
+
+# ── Equipment availability ────────────────────────────────────
+@app.route('/api/events/availability', methods=['GET'])
+@login_required
+def get_availability():
+    """
+    Returns which booths and printers are already booked on a given date
+    and time range (overlapping events).
+
+    Query params:
+      date        – YYYY-MM-DD
+      time_start  – HH:MM
+      time_end    – HH:MM
+      exclude_id  – (optional) event id to ignore (used when editing)
+    """
+    date       = request.args.get('date', '')
+    time_start = request.args.get('time_start', '')
+    time_end   = request.args.get('time_end', '')
+    exclude_id = request.args.get('exclude_id', type=int)
+
+    if not date or not time_start or not time_end:
+        return jsonify({'booths': [], 'printers': []})
+
+    conn = get_db(); cur = conn.cursor()
+    try:
+        # Fetch all non-completed events on the same date
+        cur.execute(
+            "SELECT id, booth, printer, time_start, time_end FROM events "
+            "WHERE date = %s AND completed = FALSE",
+            (date,)
+        )
+        rows = cur.fetchall()
+    finally:
+        cur.close(); conn.close()
+
+    busy_booths   = set()
+    busy_printers = set()
+
+    def times_overlap(s1, e1, s2, e2):
+        """Return True if [s1,e1) overlaps [s2,e2). Strings in HH:MM format."""
+        try:
+            # Treat times as simple string-comparable values (HH:MM sorts correctly)
+            return s1 < e2 and s2 < e1
+        except Exception:
+            return False
+
+    for row in rows:
+        if exclude_id and row['id'] == exclude_id:
+            continue
+        rs = row['time_start'] or ''
+        re = row['time_end']   or ''
+        if not rs or not re:
+            continue
+        if times_overlap(time_start, time_end, rs, re):
+            # booth / printer columns may hold comma-separated values (multi-select)
+            if row['booth']:
+                for b in row['booth'].split(','):
+                    b = b.strip()
+                    if b:
+                        busy_booths.add(b)
+            if row['printer']:
+                for p in row['printer'].split(','):
+                    p = p.strip()
+                    if p:
+                        busy_printers.add(p)
+
+    return jsonify({'booths': list(busy_booths), 'printers': list(busy_printers)})
 
 
 # ══════════════════════════════════════════════════════════════

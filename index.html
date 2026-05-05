@@ -1324,9 +1324,9 @@ function startEditEvent(id) {
   document.getElementById('f-package').value = pkgObj ? `${pkgObj.name}|${pkgObj.price}` : '';
   document.getElementById('f-pkg-price').value = ev.package_price || 0;
 
-  // Booth and printer are now arrays; restore after rendering checkboxes
-  const savedBooths   = Array.isArray(ev.booth)   ? ev.booth   : (ev.booth   ? [ev.booth]   : []);
-  const savedPrinters = Array.isArray(ev.printer)  ? ev.printer : (ev.printer ? [ev.printer] : []);
+  // Booth and printer are stored as comma-separated strings
+  const savedBooths   = ev.booth   ? ev.booth.split(',').map(s => s.trim()).filter(Boolean)   : [];
+  const savedPrinters = ev.printer ? ev.printer.split(',').map(s => s.trim()).filter(Boolean) : [];
   const evDate  = ev.date || '';
   const evStart = ev.time_start || '';
   const evEnd   = ev.time_end   || '';
@@ -1463,8 +1463,8 @@ async function saveEvent() {
     contact,
     package:       pkgKey,
     package_price: pkgObj ? pkgObj.price : (parseFloat(document.getElementById('f-pkg-price').value) || 0),
-    booth:         getSelectedBooths(),
-    printer:       getSelectedPrinters(),
+    booth:         getSelectedBooths().join(', '),
+    printer:       getSelectedPrinters().join(', '),
     operators:     selectedOps,
     operator:      selectedOps[0] || '',
     down_payment:  parseFloat(document.getElementById('f-dp').value) || 0,

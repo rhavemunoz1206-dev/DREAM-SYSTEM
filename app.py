@@ -14,6 +14,9 @@ from functools import wraps
 
 import psycopg2
 import psycopg2.extras
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
 
 from flask import (
     Flask, request, jsonify, session,
@@ -33,11 +36,17 @@ CORS(app, supports_credentials=True,
      origins=os.environ.get('CORS_ORIGINS', 'http://localhost:5000').split(','))
 
 BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
-UPLOAD_DIR   = os.path.join(BASE_DIR, 'uploads')
 FRONTEND_DIR = BASE_DIR
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf'}
+
+# ── Cloudinary setup ──────────────────────────────────────────
+cloudinary.config(
+    cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME'),
+    api_key    = os.environ.get('CLOUDINARY_API_KEY'),
+    api_secret = os.environ.get('CLOUDINARY_API_SECRET'),
+    secure     = True
+)
 
 DATABASE_URL = os.environ.get('DATABASE_URL')
 if not DATABASE_URL:
@@ -656,26 +665,33 @@ def upload_file(event_id):
         return jsonify({'error': 'Empty filename'}), 400
     if not allowed_file(file.filename):
         return jsonify({'error': 'File type not allowed'}), 400
-    ext      = file.filename.rsplit('.', 1)[1].lower()
-    filename = f'event_{event_id}_{upload_type}.{ext}'
-    file.save(os.path.join(UPLOAD_DIR, filename))
+
+    # Upload to Cloudinary — public_id keeps one file per event+type (auto-replaces old one)
+    public_id = f'dream/event_{event_id}_{upload_type}'
+    try:
+        result = cloudinary.uploader.upload(
+            file,
+            public_id        = public_id,
+            overwrite        = True,
+            resource_type    = 'auto',   # handles both images and PDFs
+            invalidate       = True,
+        )
+    except Exception as e:
+        return jsonify({'error': f'Cloudinary upload failed: {str(e)}'}), 500
+
+    file_url = result['secure_url']
+
     conn = get_db(); cur = conn.cursor()
     if upload_type == 'payment':
-        cur.execute('UPDATE events SET has_payment_proof=TRUE WHERE id=%s', (event_id,))
+        cur.execute(
+            'UPDATE events SET has_payment_proof=TRUE WHERE id=%s', (event_id,)
+        )
     else:
-        cur.execute('UPDATE events SET has_layout=TRUE WHERE id=%s', (event_id,))
+        cur.execute(
+            'UPDATE events SET has_layout=TRUE WHERE id=%s', (event_id,)
+        )
     conn.commit(); cur.close(); conn.close()
-    return jsonify({'ok': True, 'filename': filename, 'url': f'/api/uploads/{filename}'})
-
-
-@app.route('/api/uploads/<path:filename>')
-def serve_upload(filename):
-    if 'user' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    safe_path = os.path.join(UPLOAD_DIR, filename)
-    if not os.path.exists(safe_path):
-        return jsonify({'error': 'File not found'}), 404
-    return send_from_directory(UPLOAD_DIR, filename)
+    return jsonify({'ok': True, 'url': file_url})
 
 
 @app.route('/api/events/<int:event_id>/upload-url/<upload_type>')
@@ -683,12 +699,19 @@ def serve_upload(filename):
 def get_upload_url(event_id, upload_type):
     if upload_type not in ('payment', 'layout'):
         return jsonify({'error': 'Invalid upload type'}), 400
-    for ext in ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf']:
-        filename  = f'event_{event_id}_{upload_type}.{ext}'
-        full_path = os.path.join(UPLOAD_DIR, filename)
-        if os.path.exists(full_path):
-            return jsonify({'url': f'/api/uploads/{filename}', 'filename': filename})
-    return jsonify({'error': 'File not found'}), 404
+
+    public_id = f'dream/event_{event_id}_{upload_type}'
+    try:
+        # Check if the resource exists on Cloudinary
+        result = cloudinary.api.resource(public_id, resource_type='image')
+        return jsonify({'url': result['secure_url']})
+    except Exception:
+        # Try as raw (PDF)
+        try:
+            result = cloudinary.api.resource(public_id, resource_type='raw')
+            return jsonify({'url': result['secure_url']})
+        except Exception:
+            return jsonify({'error': 'File not found'}), 404
 
 
 # ══════════════════════════════════════════════════════════════

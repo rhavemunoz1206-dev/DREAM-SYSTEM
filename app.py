@@ -624,7 +624,7 @@ def extend_event(event_id):
 
 # ── Delete a single extension ─────────────────────────────────
 @app.route('/api/events/<int:event_id>/extensions/<int:ext_idx>', methods=['DELETE'])
-@admin_required
+@login_required
 def delete_extension(event_id, ext_idx):
     conn = get_db(); cur = conn.cursor()
     cur.execute('SELECT * FROM events WHERE id=%s', (event_id,))

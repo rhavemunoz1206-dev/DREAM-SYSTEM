@@ -1771,7 +1771,7 @@ function openExtension(id) {
             <div class="extension-item-info">⏱ ${x.duration} · ${x.notes||''}</div>
             <div style="display:flex;align-items:center;gap:8px">
               <span class="extension-item-amount">₱${x.amount.toLocaleString()}</span>
-              ${isAdmin() ? `<button class="btn-del-ext" onclick="deleteExtension(${id},${i})">×</button>` : ''}
+              <button class="btn-del-ext" onclick="deleteExtension(${id},${i})">×</button>
             </div>
           </div>
         `).join('')
@@ -1842,7 +1842,6 @@ async function saveExtension(id) {
 }
 
 async function deleteExtension(evId, extIdx) {
-  if (!isAdmin()) { toast('Only admins can delete extensions.', true); return; }
   const ev = EVENTS.find(e => e.id === evId);
   if (!ev || !ev.extensions) return;
   const ext = ev.extensions[extIdx];

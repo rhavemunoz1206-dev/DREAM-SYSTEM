@@ -218,7 +218,7 @@
   .op-unavailable { font-size: 10px; font-weight: 800; color: var(--red); background: #fde8e8; border-radius: 10px; padding: 2px 7px; }
   .no-ops-msg { color: #bbb; font-size: 13px; font-weight: 600; padding: 8px 0; }
 
-  /* EDIT SELECTIONS */
+  /* CREATE OPTIONS */
   #screen-edit { background: linear-gradient(160deg, var(--gold) 0%, var(--yellow) 40%, var(--gold-light) 100%); padding: 28px 20px; overflow-y: auto; }
   .edit-layout { max-width: 1080px; width: 100%; margin: 0 auto; display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; }
   .package-mgmt-card, .ops-card { background: rgba(255,255,255,0.93); border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow); }
@@ -713,11 +713,11 @@
   </div>
 </div>
 
-<!-- EDIT SELECTIONS -->
+<!-- CREATE OPTIONS -->
 <div id="screen-edit" class="screen">
   <div class="top-nav">
     <button class="back-btn" onclick="go('menu')">← Back</button>
-    <div class="screen-title" style="margin:0;color:white">EDIT SELECTIONS</div>
+    <div class="screen-title" style="margin:0;color:white">CREATE OPTIONS</div>
   </div>
   <div class="edit-layout">
     <div class="package-mgmt-card">
@@ -1957,7 +1957,7 @@ function adjustCount(field, delta) {
   el.value = Math.max(0, (parseInt(el.value) || 0) + delta);
 }
 
-/* ── EDIT SELECTIONS ─────────────────────────────────────── */
+/* ── CREATE OPTIONS ─────────────────────────────────────── */
 function renderEditSelections() {
   renderUnitTags('printer');
   renderUnitTags('booth');

@@ -2167,8 +2167,8 @@ async function renderSummary() {
       <div class="stat-card"><div class="stat-num blue">${total}</div><div class="stat-label">Total Events</div></div>
       <div class="stat-card"><div class="stat-num green">${done}</div><div class="stat-label">Completed</div></div>
       <div class="stat-card"><div class="stat-num red">${pending}</div><div class="stat-label">Pending</div></div>
-      <div class="stat-card"><div class="stat-num gold">₱${(income/1000).toFixed(1)}k</div><div class="stat-label">Gross Income</div></div>
-      <div class="stat-card"><div class="stat-num green">₱${(netRevenue/1000).toFixed(1)}k</div><div class="stat-label">Net Revenue</div></div>
+      <div class="stat-card"><div class="stat-num gold" style="font-size:clamp(16px,2vw,26px)">₱${income.toLocaleString()}</div><div class="stat-label">Gross Income</div></div>
+      <div class="stat-card"><div class="stat-num green" style="font-size:clamp(16px,2vw,26px)">₱${netRevenue.toLocaleString()}</div><div class="stat-label">Net Income</div></div>
     </div>
     <div class="summary-section-title">📦 Material Usage <span class="pill">${months[SUMMARY_MONTH]}</span></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
@@ -2202,7 +2202,7 @@ async function renderSummary() {
       <div class="income-total"><span>Total Collected</span><span style="color:var(--green)">₱${collected.toLocaleString()}</span></div>
       ${totalSalaries > 0 ? `<div class="income-total" style="font-size:16px;padding-top:4px"><span style="color:#aaa;font-size:13px">Total Operator Salaries</span><span style="color:var(--red);font-size:16px">−₱${totalSalaries.toLocaleString()}</span></div>` : ''}
       ${totalMisc > 0 ? `<div class="income-total" style="font-size:16px;padding-top:4px"><span style="color:#aaa;font-size:13px">Total Misc. Costs</span><span style="color:var(--orange);font-size:16px">−₱${totalMisc.toLocaleString()}</span></div>` : ''}
-      <div class="income-total"><span style="color:var(--green)">Net Revenue</span><span style="color:var(--green)">₱${netRevenue.toLocaleString()}</span></div>
+      <div class="income-total"><span style="color:var(--green)">Net Income</span><span style="color:var(--green)">₱${netRevenue.toLocaleString()}</span></div>
       <div class="income-total" style="font-size:16px;padding-top:4px"><span style="color:#aaa;font-size:13px">Outstanding Balance</span><span style="color:var(--red);font-size:16px">₱${outstanding.toLocaleString()}</span></div>
       <div class="income-total"><span>Gross Income</span><span>₱${income.toLocaleString()}</span></div>
     </div>
@@ -2301,7 +2301,7 @@ async function downloadSummaryPDF() {
 
   doc.autoTable({
     startY: 26,
-    head: [['#','Event','Date','Client','Package','Booth','Printer','Operators','Salary','Ext.','Misc.','Gross Income','Net','Photo','Mag.','Payment','Status']],
+    head: [['#','Event','Date','Client','Package','Booth','Printer','Operators','Salary','Ext.','Misc.','Gross Income','Net Income','Photo','Mag.','Payment','Status']],
     body: tableRows, theme: 'grid',
     headStyles: { fillColor:[26,16,5], textColor:255, fontStyle:'bold', fontSize:6 },
     bodyStyles: { fontSize:6 },
@@ -2312,6 +2312,35 @@ async function downloadSummaryPDF() {
       }
     },
     margin: { left:10, right:10 }, tableWidth: pageW-20,
+  });
+
+  // Summary totals table
+  const totalGross = evs.reduce((s,e) => s + (e.package_price||0) + (e.extensions||[]).reduce((x,ext)=>x+ext.amount,0), 0);
+  const totalNet = evs.reduce((s,e) => {
+    const extAmt=(e.extensions||[]).reduce((x,ext)=>x+ext.amount,0);
+    const totalDue=(e.package_price||0)+extAmt;
+    const opSal=getTotalSalary(e), misc=e.misc_total||0;
+    return s + Math.max(0, totalDue - opSal - misc);
+  }, 0);
+  const p2 = (n) => `PHP ${n.toLocaleString()}`;
+  doc.autoTable({
+    startY: doc.lastAutoTable.finalY + 10,
+    head: [['Monthly Summary', 'Amount']],
+    body: [
+      ['Total Gross Income', p2(totalGross)],
+      ['Total Net Income',   p2(totalNet)],
+    ],
+    theme: 'grid',
+    headStyles: { fillColor:[26,16,5], textColor:255, fontStyle:'bold', fontSize:9 },
+    bodyStyles: { fontSize:9, fontStyle:'bold' },
+    didParseCell(data) {
+      if (data.section === 'body') {
+        if (data.row.index === 0) { data.cell.styles.textColor = [201,146,10]; }
+        if (data.row.index === 1) { data.cell.styles.textColor = [26,122,74]; }
+      }
+    },
+    columnStyles: { 0: { cellWidth: 80 }, 1: { cellWidth: 60 } },
+    margin: { left:10 },
   });
 
   const totalPages = doc.internal.getNumberOfPages();

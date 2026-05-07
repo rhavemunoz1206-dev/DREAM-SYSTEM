@@ -528,7 +528,7 @@
       <div class="panel-top">
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="back-btn dark" onclick="go('menu')">← Menu</button>
-          <button class="edit-sel-btn" id="ev-edit-sel-btn" onclick="go('edit')">✏️ Edit Selections</button>
+          <button class="edit-sel-btn" id="ev-edit-sel-btn" onclick="go('edit')">✏️ Create Options</button>
           <button class="edit-sel-btn" id="ev-summary-btn" onclick="openSummary()" style="background:rgba(46,199,107,0.2);color:#1a7a4a">📊 Summary</button>
         </div>
         <div class="cal-nav-row">
@@ -1581,7 +1581,7 @@ function refreshOperatorAvailability() {
 function renderOperatorCheckboxes(selectedOps = [], excludeEventId = null, forDate = null, forStart = null, forEnd = null) {
   const container = document.getElementById('f-operators-container');
   if (!SELECTIONS.operators || !SELECTIONS.operators.length) {
-    container.innerHTML = '<div class="no-ops-msg">No operators configured. Add in Edit Selections.</div>';
+    container.innerHTML = '<div class="no-ops-msg">No operators configured. Add in Create Options.</div>';
     return;
   }
   const date  = forDate  || document.getElementById('f-date')?.value  || '';
@@ -2322,21 +2322,30 @@ async function downloadSummaryPDF() {
     const opSal=getTotalSalary(e), misc=e.misc_total||0;
     return s + Math.max(0, totalDue - opSal - misc);
   }, 0);
+  const totalOpSal = evs.reduce((s,e) => s + getTotalSalary(e), 0);
+  const totalMiscFees = evs.reduce((s,e) => s + (e.misc_total||0), 0);
+  const totalExtAmt = evs.reduce((s,e) => s + (e.extensions||[]).reduce((x,ext)=>x+ext.amount,0), 0);
   const p2 = (n) => `PHP ${n.toLocaleString()}`;
   doc.autoTable({
     startY: doc.lastAutoTable.finalY + 10,
     head: [['Monthly Summary', 'Amount']],
     body: [
-      ['Total Gross Income', p2(totalGross)],
-      ['Total Net Income',   p2(totalNet)],
+      ['Total Gross Income',       p2(totalGross)],
+      ['Total Extension Hours',    p2(totalExtAmt)],
+      ['Total Operator Salaries',  p2(totalOpSal)],
+      ['Total Miscellaneous Fees', p2(totalMiscFees)],
+      ['Total Net Income',         p2(totalNet)],
     ],
     theme: 'grid',
     headStyles: { fillColor:[26,16,5], textColor:255, fontStyle:'bold', fontSize:9 },
     bodyStyles: { fontSize:9, fontStyle:'bold' },
     didParseCell(data) {
       if (data.section === 'body') {
-        if (data.row.index === 0) { data.cell.styles.textColor = [201,146,10]; }
-        if (data.row.index === 1) { data.cell.styles.textColor = [26,122,74]; }
+        if (data.row.index === 0) { data.cell.styles.textColor = [26,16,5]; }
+        if (data.row.index === 1) { data.cell.styles.textColor = [192,25,44]; }
+        if (data.row.index === 2) { data.cell.styles.textColor = [192,25,44]; }
+        if (data.row.index === 3) { data.cell.styles.textColor = [192,25,44]; }
+        if (data.row.index === 4) { data.cell.styles.textColor = [26,122,74]; }
       }
     },
     columnStyles: { 0: { cellWidth: 80 }, 1: { cellWidth: 60 } },
